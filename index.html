@@ -42,7 +42,7 @@
   const tg = window.Telegram.WebApp; tg.expand();
   const initData = tg.initData || '';
   const user = tg.initDataUnsafe?.user || null;
-  const API_BASE = 'REPLACE_WITH_BACKEND_URL'; // например https://defect-bot.onrender.com
+  const API_BASE = 'https://sskreports-production.up.railway.app/'; // например https://defect-bot.onrender.com
 
   // Справочник парков/станций (редактируемый)
   const DICT = {
@@ -212,4 +212,5 @@
   render();
   </script>
 </body>
+
 </html>
