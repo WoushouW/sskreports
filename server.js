@@ -9,6 +9,16 @@ const path = require('path');
 const fs = require('fs').promises;
 require('dotenv').config();
 
+const ALLOW_DEV = process.env.ALLOW_DEV === 'true';
+
+function getUserFromReq(req, initData) {
+  const u = validateTelegramData(initData);
+  if (u) return u;
+  // fallback для dev/браузера: берём из dev_user_id (query/body/заголовок)
+  const devId = req.query.dev_user_id || req.body?.dev_user_id || req.get('x-dev-user-id');
+  return devId ? { id: Number(devId), first_name: 'Dev', last_name: 'User' } : null;
+}
+
 const app = express();
 
 // важливо для Render (проксі), щоб req.protocol був вірний
@@ -170,7 +180,7 @@ async function saveToSheets(report, imageUrls = []) {
 
 // admin check
 app.get('/api/is-admin', (req, res) => {
-  const user = validateTelegramData(req.query.initData);
+  const user = getUserFromRequest(req, req.query.initData);
   if (!user) return res.json({ ok: false, error: 'Недійсні дані' });
   const isAdmin = ADMIN_IDS.includes(String(user.id));
   res.json({ ok: true, is_admin: isAdmin });
@@ -178,7 +188,7 @@ app.get('/api/is-admin', (req, res) => {
 
 // create report
 app.post('/api/report', upload.array('images', 10), async (req, res) => {
-  const user = validateTelegramData(req.body.initData);
+  const user = getUserFromRequest(req, req.body.initData);
   if (!user) return res.json({ ok: false, error: 'Недійсні дані користувача' });
 
   const { title, description, park, station, incident_at } = req.body;
@@ -220,7 +230,7 @@ app.post('/api/report', upload.array('images', 10), async (req, res) => {
 
 // list reports (admin)
 app.get('/api/reports', async (req, res) => {
-  const user = validateTelegramData(req.query.initData);
+  const user = getUserFromRequest(req, req.query.initData);
   if (!user || !ADMIN_IDS.includes(String(user.id))) {
     return res.json({ ok: false, error: 'Немає доступу' });
   }
@@ -235,7 +245,7 @@ app.get('/api/reports', async (req, res) => {
 
 // delete report (admin)
 app.delete('/api/report/:id', async (req, res) => {
-  const user = validateTelegramData(req.query.initData);
+  const user = getUserFromReq(req, req.query.initData);
   if (!user || !ADMIN_IDS.includes(String(user.id))) {
     return res.json({ ok: false, error: 'Немає доступу' });
   }
@@ -264,7 +274,7 @@ app.delete('/api/report/:id', async (req, res) => {
 
 // update report (admin)
 app.put('/api/report/:id', async (req, res) => {
-  const user = validateTelegramData(req.body.initData);
+  const user = getUserFromReq(req, req.body.initData);
   if (!user || !ADMIN_IDS.includes(String(user.id))) {
     return res.json({ ok: false, error: 'Немає доступу' });
   }

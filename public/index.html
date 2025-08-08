@@ -282,6 +282,15 @@
     </div>
 
     <script>
+        const DEV_USER_ID = '987654321';
+
+        function initDataOrDev() {
+        const raw = tg.initData || '';
+        if (raw && raw.length > 0) return raw; // настоящие данные Telegram
+        // dev-режим
+        return ''; // вернём пусто, а сам ID пробросим отдельным полем
+            }
+
         // Initialize Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -514,7 +523,8 @@
 
                 // Prepare form data
                 const formData = new FormData();
-                formData.append('initData', tg.initData || '');
+                formData.append('initData', initDataOrDev());
+                if (!tg.initData) formData.append('dev_user_id', DEV_USER_ID);
                 formData.append('park', state.selectedPark);
                 formData.append('station', state.selectedStation);
                 formData.append('title', elements.titleInput.value.trim());
@@ -563,13 +573,13 @@
         // Check admin status
         async function checkAdminStatus() {
             try {
-                const user = tg.initDataUnsafe?.user;
-                if (!user) return false;
-
-                const response = await fetch(`${API_BASE}/api/is-admin?initData=${encodeURIComponent(tg.initData || '')}`);
+                const q = (tg.initData && tg.initData.length > 0)
+               ? `initData=${encodeURIComponent(tg.initData)}`
+                : `dev_user_id=${encodeURIComponent(DEV_USER_ID)}`;
+                const response = await fetch(`${API_BASE}/api/is-admin?${q}`);
                 const result = await response.json();
                 
-                return result.ok && result.is_admin;
+                return !!(result.ok && result.is_admin);
             } catch (error) {
                 console.error('Failed to check admin status:', error);
                 return false;
@@ -610,7 +620,8 @@
                 elements.reportsLoading.classList.remove('hidden');
                 elements.reportsContainer.classList.add('hidden');
 
-                const response = await fetch(`${API_BASE}/api/reports?initData=${encodeURIComponent(tg.initData || '')}`);
+                const q = tg.initData ? `initData=${encodeURIComponent(tg.initData)}` : `dev_user_id=${encodeURIComponent(DEV_USER_ID)}`;
+                const response = await fetch(`${API_BASE}/api/reports?${q}`);
                 const result = await response.json();
 
                 if (result.ok) {
@@ -858,4 +869,3 @@
     </script>
 </body>
 </html>
-
