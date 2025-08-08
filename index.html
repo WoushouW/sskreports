@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Акт дефекту — Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",sans-serif}
+    body{margin:0;padding:24px;background:var(--tg-theme-bg-color,#111);color:var(--tg-theme-text-color,#eee)}
+    h1{margin:0 0 24px;font-weight:700;text-align:center}
+    .row{display:grid;gap:12px;max-width:720px;margin:0 auto}
+    .card{background:var(--tg-theme-secondary-bg-color,#1e1e1e);border-radius:16px;padding:16px}
+    label{font-size:14px;opacity:.9}
+    select, input, textarea {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #3a3a3a;
+        background: #1b1b1b;
+        color: #fff;
+        line-height: 1.25;
+        font-size: 16px;
+        }
+    textarea{min-height:120px;resize:vertical}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .actions{display:grid;gap:10px;margin-top:16px}
+    .btn{padding:12px 16px;border:0;border-radius:12px;cursor:pointer;font-weight:600}
+    .btn-primary{background:#1bb56d;color:#fff}
+    .btn-info{background:#0a84ff;color:#fff}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid #333;padding:8px;text-align:left}
+    .filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+  </style>
+</head>
+<body>
+  <h1>Акт дефекту</h1>
+  <div id="app" class="row"></div>
+
+  <script>
+  const tg = window.Telegram.WebApp; tg.expand();
+  const initData = tg.initData || '';
+  const user = tg.initDataUnsafe?.user || null;
+  const API_BASE = 'REPLACE_WITH_BACKEND_URL'; // например https://defect-bot.onrender.com
+
+  // Справочник парков/станций (редактируемый)
+  const DICT = {
+    'Підлісне': ['Енергоінвест', 'ТК Сан'],
+    'Новоархангельск': ['Кварта', 'Агада', 'Ліра', 'Октанта'],
+    'Добровеличківка': ['Величківська', 'Центральна', 'Ревуцька'],
+    'Новомиргород': ['Секунда', 'Тиха'],
+    'Долинська': ['Пегас', 'Альтаір']
+  };
+
+  const state = { park: '', station: '', title: '', description: '', incident_at: new Date().toISOString().slice(0,16), images: [] };
+
+  function el(tag, attrs={}, children=[]) {
+    const e = document.createElement(tag);
+    Object.entries(attrs).forEach(([k,v]) => {
+      if (k === 'class') e.className = v; else if (k === 'html') e.innerHTML=v; else e.setAttribute(k,v);
+    });
+    (Array.isArray(children)?children:[children]).forEach(c=>{ if(c) e.appendChild(c.nodeType?c:document.createTextNode(c)) });
+    return e;
+  }
+
+  function parkSelect() {
+    const parkSel = el('select', { id:'park' }, [el('option',{value:''},['— Оберіть парк —'])]);
+    Object.keys(DICT).forEach(p=>parkSel.append(el('option',{value:p},[p])));
+    parkSel.addEventListener('change', ()=>{ state.park = parkSel.value; render(); });
+    return el('div',{class:'card'},[
+      el('label',{},['Назва парку']), parkSel
+    ]);
+  }
+
+  function stationSelect() {
+    const list = state.park ? DICT[state.park] : [];
+    const stSel = el('select', { id:'station' }, [el('option',{value:''},['— Оберіть станцію —'])]);
+    list.forEach(s=>stSel.append(el('option',{value:s},[s])));
+    stSel.value = state.station;
+    stSel.addEventListener('change', ()=>{ state.station = stSel.value; });
+    return el('div',{class:'card'},[
+      el('label',{},['Назва станції']), stSel
+    ]);
+  }
+
+  function formCard() {
+    const title = el('input',{type:'text',placeholder:'Заголовок',value:state.title});
+    title.addEventListener('input',()=>state.title=title.value);
+
+    const descr = el('textarea',{placeholder:'Опишіть дефект: місце, пристрій, причина, виконана робота…'});
+    descr.value = state.description; descr.addEventListener('input',()=>state.description=descr.value);
+
+    const dt = el('input',{type:'datetime-local', value: state.incident_at});
+    dt.addEventListener('change',()=>state.incident_at = dt.value);
+
+    const file = el('input',{type:'file',accept:'image/*',multiple:true});
+    file.addEventListener('change',()=>{ state.images = Array.from(file.files||[]); });
+
+    const submitBtn = el('button',{class:'btn btn-primary'},['Додати АКТ']);
+    submitBtn.addEventListener('click', submitReport);
+
+    const allBtn = el('button',{class:'btn btn-info'},['Всі акти дефектів']);
+    allBtn.addEventListener('click', ()=>{ loadAdmin(true); });
+
+    return el('div',{class:'card'},[
+      el('label',{},['Заголовок']), title,
+      el('label',{},['Опишіть дефект']), descr,
+      el('label',{},['Оберіть дату інциденту']), dt,
+      el('label',{},['Додати зображення']), file,
+      el('div',{class:'actions'},[submitBtn, allBtn])
+    ]);
+  }
+
+  async function submitReport(){
+    if(!user) return alert('Відкрийте застосунок всередині Telegram');
+    if(!state.park||!state.station) return alert('Оберіть парк і станцію');
+
+    const fd = new FormData();
+    fd.append('initData', initData);
+    fd.append('title', state.title);
+    fd.append('description', state.description);
+    fd.append('park', state.park);
+    fd.append('station', state.station);
+    fd.append('incident_at', state.incident_at);
+    state.images.forEach(f=>fd.append('images', f));
+
+    const resp = await fetch(`${API_BASE}/api/report`, { method:'POST', body: fd });
+    const data = await resp.json().catch(()=>({ok:false}));
+    if(data.ok){
+      tg.MainButton.setText('Надіслано'); tg.MainButton.show(); setTimeout(()=>tg.MainButton.hide(),1500);
+      alert('Звіт надіслано');
+      state.title=''; state.description=''; state.images=[]; render();
+    } else {
+      alert('Помилка відправки: '+(data.error||resp.status));
+    }
+  }
+
+  function adminFilters(onChange){
+    const pSel = el('select',{},[el('option',{value:''},['Всі парки']), ...Object.keys(DICT).map(p=>el('option',{value:p},[p]))]);
+    const sSel = el('select',{},[el('option',{value:''},['Всі станції'])]);
+    pSel.addEventListener('change',()=>{ sSel.innerHTML=''; sSel.append(el('option',{value:''},['Всі станції'])); if(pSel.value) DICT[pSel.value].forEach(s=>sSel.append(el('option',{value:s},[s]))); onChange(pSel.value,sSel.value); });
+    sSel.addEventListener('change',()=>onChange(pSel.value,sSel.value));
+    return el('div',{class:'filters'},[pSel,sSel]);
+  }
+
+  async function loadAdmin(force=false){
+    const wrap = document.getElementById('app');
+    wrap.innerHTML='';
+    wrap.append(el('div',{class:'card'},[el('div',{},['Завантаження…'])]));
+    const url = new URL(`${API_BASE}/api/reports`);
+    url.searchParams.set('initData', initData);
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if(!data.ok){ render(); return alert(data.error||'Нема доступу'); }
+
+    const rows = data.items;
+    const table = el('table',{class:'table'});
+    table.append(el('thead',{},[el('tr',{},['#','Дата','Користувач','Парк','Станція','Заголовок','Дії'].map(h=>el('th',{},[h])))]));
+    const tbody = el('tbody');
+    table.append(tbody);
+
+    function fill(filterPark='', filterStation=''){
+      tbody.innerHTML='';
+      rows.filter(r=>(!filterPark||r.park===filterPark)&&(!filterStation||r.station===filterStation))
+        .forEach(r=>{
+          const tr = el('tr');
+          tr.append(el('td',{},[r.id]));
+          tr.append(el('td',{},[r.incident_at||'—']))
+          tr.append(el('td',{},[`${r.user_name||''} (${r.user_id})`]));
+          tr.append(el('td',{},[r.park]));
+          tr.append(el('td',{},[r.station]));
+          tr.append(el('td',{},[r.title||'—']));
+          const delBtn = el('button',{class:'btn'},['Видалити']);
+          delBtn.addEventListener('click', async ()=>{
+            if(!confirm('Видалити запис?')) return;
+            const res = await fetch(`${API_BASE}/api/report/${r.id}?initData=${encodeURIComponent(initData)}`, {method:'DELETE'});
+            const j = await res.json(); if(j.ok){ tr.remove(); } else alert(j.error||'Помилка');
+          });
+          const editBtn = el('button',{class:'btn'},['Редагувати']);
+          editBtn.addEventListener('click', ()=>{
+            const nt = prompt('Новий заголовок', r.title||'');
+            if(nt===null) return;
+            fetch(`${API_BASE}/api/report/${r.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData, title: nt})}).then(r=>r.json()).then(j=>{ if(j.ok){ r.title=nt; fill(filterPark,filterStation); } else alert(j.error||'Помилка'); });
+          });
+          const tdAct = el('td'); tdAct.append(editBtn); tdAct.append(' '); tdAct.append(delBtn);
+          tr.append(tdAct); tbody.append(tr);
+        });
+    }
+
+    const filters = adminFilters(fill);
+    const card = el('div',{class:'card'},[filters, table]);
+    wrap.innerHTML=''; wrap.append(card);
+    fill();
+  }
+
+  async function render(){
+    const root = document.getElementById('app');
+    root.innerHTML='';
+    // простой серверный чек: если админ — вернёт ok
+    try{
+      const u = new URL(`${API_BASE}/api/is-admin`); u.searchParams.set('initData', initData);
+      const r = await fetch(u); const j = await r.json();
+      if(j.ok && j.is_admin){ return loadAdmin(); }
+    }catch(e){/* молча фоллбек в форму */}
+
+    root.append(parkSelect());
+    if(state.park) root.append(stationSelect());
+    root.append(formCard());
+  }
+
+  render();
+  </script>
+</body>
+</html>
