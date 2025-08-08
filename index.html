@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Акт дефекту — Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --tg-color-bg: var(--tg-theme-bg-color, #17212b);
+            --tg-color-secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+            --tg-color-text: var(--tg-theme-text-color, #f5f5f5);
+            --tg-color-hint: var(--tg-theme-hint-color, #708499);
+            --tg-color-link: var(--tg-theme-link-color, #6ab7ff);
+            --tg-color-button: var(--tg-theme-button-color, #5288c1);
+            --tg-color-button-text: var(--tg-theme-button-text-color, #ffffff);
+        }
+        
+        body {
+            background: var(--tg-color-bg) !important;
+            color: var(--tg-color-text) !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        .bg-telegram {
+            background: var(--tg-color-secondary-bg) !important;
+        }
+        
+        .text-telegram {
+            color: var(--tg-color-text) !important;
+        }
+        
+        .text-telegram-hint {
+            color: var(--tg-color-hint) !important;
+        }
+        
+        .btn-telegram {
+            background: var(--tg-color-button) !important;
+            color: var(--tg-color-button-text) !important;
+        }
+        
+        .input-telegram {
+            background: var(--tg-color-secondary-bg) !important;
+            color: var(--tg-color-text) !important;
+            border-color: var(--tg-color-hint) !important;
+        }
+        
+        .input-telegram:focus {
+            border-color: var(--tg-color-button) !important;
+            box-shadow: 0 0 0 1px var(--tg-color-button) !important;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-spinner {
+            border: 2px solid var(--tg-color-hint);
+            border-top: 2px solid var(--tg-color-button);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .image-preview {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .image-remove {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-6 max-w-4xl">
+        <!-- Loading Screen -->
+        <div id="loading" class="flex items-center justify-center min-h-screen">
+            <div class="text-center">
+                <div class="loading-spinner rounded-full w-12 h-12 mx-auto mb-4"></div>
+                <p class="text-telegram-hint">Завантаження...</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="content" class="hidden">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-telegram mb-2">
+                    <i class="fas fa-clipboard-list mr-2"></i>
+                    Акт дефекту
+                </h1>
+                <p class="text-telegram-hint">Система звітування про технічні дефекти</p>
+            </div>
+
+            <!-- User Form -->
+            <div id="userForm" class="space-y-6">
+                <!-- Park Selection -->
+                <div class="bg-telegram rounded-xl p-6 fade-in">
+                    <label class="block text-sm font-medium text-telegram mb-3">
+                        <i class="fas fa-map-marker-alt mr-2"></i>
+                        Назва парку
+                    </label>
+                    <select id="parkSelect" class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                        <option value="">— Оберіть парк —</option>
+                    </select>
+                </div>
+
+                <!-- Station Selection -->
+                <div id="stationCard" class="bg-telegram rounded-xl p-6 fade-in hidden">
+                    <label class="block text-sm font-medium text-telegram mb-3">
+                        <i class="fas fa-building mr-2"></i>
+                        Назва станції
+                    </label>
+                    <select id="stationSelect" class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                        <option value="">— Оберіть станцію —</option>
+                    </select>
+                </div>
+
+                <!-- Form Fields -->
+                <div id="formFields" class="space-y-6 hidden">
+                    <!-- Title -->
+                    <div class="bg-telegram rounded-xl p-6 fade-in">
+                        <label class="block text-sm font-medium text-telegram mb-3">
+                            <i class="fas fa-heading mr-2"></i>
+                            Заголовок
+                        </label>
+                        <input type="text" id="titleInput" placeholder="Введіть заголовок дефекту..." 
+                               class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                    </div>
+
+                    <!-- Description -->
+                    <div class="bg-telegram rounded-xl p-6 fade-in">
+                        <label class="block text-sm font-medium text-telegram mb-3">
+                            <i class="fas fa-align-left mr-2"></i>
+                            Опишіть дефект
+                        </label>
+                        <textarea id="descriptionInput" rows="4" placeholder="Детальний опис дефекту: місце, пристрій, причина, виконана робота..."
+                                  class="w-full p-3 rounded-lg input-telegram border focus:outline-none resize-vertical"></textarea>
+                    </div>
+
+                    <!-- Date -->
+                    <div class="bg-telegram rounded-xl p-6 fade-in">
+                        <label class="block text-sm font-medium text-telegram mb-3">
+                            <i class="fas fa-calendar-alt mr-2"></i>
+                            Оберіть дату інциденту
+                        </label>
+                        <input type="datetime-local" id="dateInput" 
+                               class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                    </div>
+
+                    <!-- Images -->
+                    <div class="bg-telegram rounded-xl p-6 fade-in">
+                        <label class="block text-sm font-medium text-telegram mb-3">
+                            <i class="fas fa-images mr-2"></i>
+                            Додати зображення
+                        </label>
+                        <input type="file" id="imageInput" multiple accept="image/*" 
+                               class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                        <div id="imagePreview" class="mt-4 flex flex-wrap gap-2"></div>
+                        <p class="text-sm text-telegram-hint mt-2">Можна додати декілька зображень</p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="space-y-4">
+                        <button id="submitBtn" 
+                                class="w-full py-4 px-6 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition duration-200 flex items-center justify-center">
+                            <i class="fas fa-plus mr-2"></i>
+                            Додати АКТ
+                        </button>
+                        <button id="viewAllBtn" 
+                                class="w-full py-4 px-6 btn-telegram hover:opacity-90 font-semibold rounded-xl transition duration-200 flex items-center justify-center">
+                            <i class="fas fa-list mr-2"></i>
+                            Всі акти дефектів
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Panel -->
+            <div id="adminPanel" class="hidden">
+                <!-- Admin Header -->
+                <div class="bg-telegram rounded-xl p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-bold text-telegram">
+                            <i class="fas fa-user-shield mr-2"></i>
+                            Панель адміністратора
+                        </h2>
+                        <button id="backToFormBtn" 
+                                class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-200">
+                            <i class="fas fa-arrow-left mr-2"></i>
+                            Назад
+                        </button>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-telegram mb-2">Фільтр по парку</label>
+                            <select id="filterPark" class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                                <option value="">Всі парки</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-telegram mb-2">Фільтр по станції</label>
+                            <select id="filterStation" class="w-full p-3 rounded-lg input-telegram border focus:outline-none">
+                                <option value="">Всі станції</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Table -->
+                <div class="bg-telegram rounded-xl p-6">
+                    <div id="reportsLoading" class="text-center py-8">
+                        <div class="loading-spinner rounded-full w-8 h-8 mx-auto mb-4"></div>
+                        <p class="text-telegram-hint">Завантаження звітів...</p>
+                    </div>
+                    <div id="reportsContainer" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b border-gray-600">
+                                        <th class="text-left p-3 text-telegram">ID</th>
+                                        <th class="text-left p-3 text-telegram">Дата</th>
+                                        <th class="text-left p-3 text-telegram">Користувач</th>
+                                        <th class="text-left p-3 text-telegram">Парк</th>
+                                        <th class="text-left p-3 text-telegram">Станція</th>
+                                        <th class="text-left p-3 text-telegram">Заголовок</th>
+                                        <th class="text-left p-3 text-telegram">Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportsTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="noReports" class="text-center py-8 hidden">
+                            <i class="fas fa-inbox text-4xl text-telegram-hint mb-4"></i>
+                            <p class="text-telegram-hint">Звіти не знайдено</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Report Details -->
+    <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-telegram rounded-xl max-w-2xl w-full max-h-90vh overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-telegram">Деталі звіту</h3>
+                    <button id="closeModal" class="text-telegram-hint hover:text-telegram">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div id="modalContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        // Configuration
+        const API_BASE = 'https://your-backend-url.com'; // Replace with your backend URL
+        const ADMIN_IDS = ['123456789']; // Replace with actual admin IDs
+
+        // Parks and stations dictionary
+        const PARKS_DICT = {
+            'Підлісне': ['Енергоінвест', 'ТК Сан'],
+            'Новоархангельск': ['Кварта', 'Агада', 'Ліра', 'Октанта'],
+            'Добровеличківка': ['Величківська', 'Центральна', 'Ревуцька'],
+            'Новомиргород': ['Секунда', 'Тиха'],
+            'Долинська': ['Пегас', 'Альтаір']
+        };
+
+        // Application state
+        const state = {
+            currentView: 'form',
+            selectedPark: '',
+            selectedStation: '',
+            selectedImages: [],
+            reports: [],
+            filteredReports: []
+        };
+
+        // DOM elements
+        const elements = {
+            loading: document.getElementById('loading'),
+            content: document.getElementById('content'),
+            userForm: document.getElementById('userForm'),
+            adminPanel: document.getElementById('adminPanel'),
+            parkSelect: document.getElementById('parkSelect'),
+            stationSelect: document.getElementById('stationSelect'),
+            stationCard: document.getElementById('stationCard'),
+            formFields: document.getElementById('formFields'),
+            titleInput: document.getElementById('titleInput'),
+            descriptionInput: document.getElementById('descriptionInput'),
+            dateInput: document.getElementById('dateInput'),
+            imageInput: document.getElementById('imageInput'),
+            imagePreview: document.getElementById('imagePreview'),
+            submitBtn: document.getElementById('submitBtn'),
+            viewAllBtn: document.getElementById('viewAllBtn'),
+            backToFormBtn: document.getElementById('backToFormBtn'),
+            filterPark: document.getElementById('filterPark'),
+            filterStation: document.getElementById('filterStation'),
+            reportsLoading: document.getElementById('reportsLoading'),
+            reportsContainer: document.getElementById('reportsContainer'),
+            reportsTableBody: document.getElementById('reportsTableBody'),
+            noReports: document.getElementById('noReports'),
+            reportModal: document.getElementById('reportModal'),
+            modalContent: document.getElementById('modalContent'),
+            closeModal: document.getElementById('closeModal')
+        };
+
+        // Initialize app
+        async function initApp() {
+            try {
+                // Set current date-time
+                const now = new Date();
+                elements.dateInput.value = now.toISOString().slice(0, 16);
+
+                // Populate parks
+                populateParks();
+
+                // Check if user is admin
+                const isAdmin = await checkAdminStatus();
+                
+                // Setup event listeners
+                setupEventListeners();
+
+                // Show content
+                elements.loading.classList.add('hidden');
+                elements.content.classList.remove('hidden');
+
+                // If admin and viewing reports was requested, show admin panel
+                if (isAdmin && window.location.hash === '#admin') {
+                    await showAdminPanel();
+                }
+
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                showError('Помилка ініціалізації додатку');
+            }
+        }
+
+        // Populate parks dropdown
+        function populateParks() {
+            Object.keys(PARKS_DICT).forEach(park => {
+                const option = document.createElement('option');
+                option.value = park;
+                option.textContent = park;
+                elements.parkSelect.appendChild(option);
+                
+                // Also add to filter
+                const filterOption = document.createElement('option');
+                filterOption.value = park;
+                filterOption.textContent = park;
+                elements.filterPark.appendChild(filterOption);
+            });
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Park selection
+            elements.parkSelect.addEventListener('change', (e) => {
+                state.selectedPark = e.target.value;
+                handleParkSelection();
+            });
+
+            // Station selection
+            elements.stationSelect.addEventListener('change', (e) => {
+                state.selectedStation = e.target.value;
+                handleStationSelection();
+            });
+
+            // Image input
+            elements.imageInput.addEventListener('change', handleImageSelection);
+
+            // Form submission
+            elements.submitBtn.addEventListener('click', handleFormSubmit);
+
+            // View all reports
+            elements.viewAllBtn.addEventListener('click', showAdminPanel);
+
+            // Back to form
+            elements.backToFormBtn.addEventListener('click', showForm);
+
+            // Admin filters
+            elements.filterPark.addEventListener('change', handleFilterChange);
+            elements.filterStation.addEventListener('change', handleFilterChange);
+
+            // Modal close
+            elements.closeModal.addEventListener('click', closeModal);
+            elements.reportModal.addEventListener('click', (e) => {
+                if (e.target === elements.reportModal) closeModal();
+            });
+        }
+
+        // Handle park selection
+        function handleParkSelection() {
+            if (state.selectedPark) {
+                // Populate stations
+                elements.stationSelect.innerHTML = '<option value="">— Оберіть станцію —</option>';
+                PARKS_DICT[state.selectedPark].forEach(station => {
+                    const option = document.createElement('option');
+                    option.value = station;
+                    option.textContent = station;
+                    elements.stationSelect.appendChild(option);
+                });
+                
+                // Show station card
+                elements.stationCard.classList.remove('hidden');
+                state.selectedStation = '';
+            } else {
+                // Hide station card and form fields
+                elements.stationCard.classList.add('hidden');
+                elements.formFields.classList.add('hidden');
+                state.selectedStation = '';
+            }
+        }
+
+        // Handle station selection
+        function handleStationSelection() {
+            if (state.selectedStation) {
+                elements.formFields.classList.remove('hidden');
+            } else {
+                elements.formFields.classList.add('hidden');
+            }
+        }
+
+        // Handle image selection
+        function handleImageSelection(e) {
+            const files = Array.from(e.target.files);
+            state.selectedImages = files;
+            
+            // Show preview
+            elements.imagePreview.innerHTML = '';
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const preview = document.createElement('div');
+                    preview.className = 'image-preview';
+                    preview.innerHTML = `
+                        <img src="${e.target.result}" class="w-20 h-20 object-cover rounded-lg">
+                        <div class="image-remove" onclick="removeImage(${index})">
+                            <i class="fas fa-times"></i>
+                        </div>
+                    `;
+                    elements.imagePreview.appendChild(preview);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Remove image
+        function removeImage(index) {
+            state.selectedImages.splice(index, 1);
+            
+            // Update file input
+            const dt = new DataTransfer();
+            state.selectedImages.forEach(file => dt.items.add(file));
+            elements.imageInput.files = dt.files;
+            
+            // Update preview
+            handleImageSelection({ target: elements.imageInput });
+        }
+
+        // Handle form submission
+        async function handleFormSubmit() {
+            try {
+                // Validate form
+                if (!state.selectedPark || !state.selectedStation) {
+                    throw new Error('Оберіть парк і станцію');
+                }
+
+                if (!elements.titleInput.value.trim()) {
+                    throw new Error('Введіть заголовок');
+                }
+
+                if (!elements.descriptionInput.value.trim()) {
+                    throw new Error('Введіть опис дефекту');
+                }
+
+                // Show loading
+                elements.submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Відправка...';
+                elements.submitBtn.disabled = true;
+
+                // Prepare form data
+                const formData = new FormData();
+                formData.append('initData', tg.initData || '');
+                formData.append('park', state.selectedPark);
+                formData.append('station', state.selectedStation);
+                formData.append('title', elements.titleInput.value.trim());
+                formData.append('description', elements.descriptionInput.value.trim());
+                formData.append('incident_at', elements.dateInput.value);
+
+                // Add images
+                state.selectedImages.forEach(file => {
+                    formData.append('images', file);
+                });
+
+                // Submit to backend
+                const response = await fetch(`${API_BASE}/api/report`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.ok) {
+                    showSuccess('Звіт успішно надіслано!');
+                    resetForm();
+                } else {
+                    throw new Error(result.error || 'Помилка відправки');
+                }
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                // Reset button
+                elements.submitBtn.innerHTML = '<i class="fas fa-plus mr-2"></i>Додати АКТ';
+                elements.submitBtn.disabled = false;
+            }
+        }
+
+        // Reset form
+        function resetForm() {
+            elements.titleInput.value = '';
+            elements.descriptionInput.value = '';
+            elements.dateInput.value = new Date().toISOString().slice(0, 16);
+            elements.imageInput.value = '';
+            elements.imagePreview.innerHTML = '';
+            state.selectedImages = [];
+        }
+
+        // Check admin status
+        async function checkAdminStatus() {
+            try {
+                const user = tg.initDataUnsafe?.user;
+                if (!user) return false;
+
+                const response = await fetch(`${API_BASE}/api/is-admin?initData=${encodeURIComponent(tg.initData || '')}`);
+                const result = await response.json();
+                
+                return result.ok && result.is_admin;
+            } catch (error) {
+                console.error('Failed to check admin status:', error);
+                return false;
+            }
+        }
+
+        // Show admin panel
+        async function showAdminPanel() {
+            try {
+                const isAdmin = await checkAdminStatus();
+                if (!isAdmin) {
+                    showError('Доступ заборонено');
+                    return;
+                }
+
+                state.currentView = 'admin';
+                elements.userForm.classList.add('hidden');
+                elements.adminPanel.classList.remove('hidden');
+
+                // Load reports
+                await loadReports();
+
+            } catch (error) {
+                showError('Помилка завантаження адмін-панелі');
+            }
+        }
+
+        // Show form
+        function showForm() {
+            state.currentView = 'form';
+            elements.adminPanel.classList.add('hidden');
+            elements.userForm.classList.remove('hidden');
+        }
+
+        // Load reports
+        async function loadReports() {
+            try {
+                elements.reportsLoading.classList.remove('hidden');
+                elements.reportsContainer.classList.add('hidden');
+
+                const response = await fetch(`${API_BASE}/api/reports?initData=${encodeURIComponent(tg.initData || '')}`);
+                const result = await response.json();
+
+                if (result.ok) {
+                    state.reports = result.items || [];
+                    state.filteredReports = [...state.reports];
+                    renderReports();
+                } else {
+                    throw new Error(result.error || 'Помилка завантаження звітів');
+                }
+
+            } catch (error) {
+                showError('Помилка завантаження звітів');
+            } finally {
+                elements.reportsLoading.classList.add('hidden');
+                elements.reportsContainer.classList.remove('hidden');
+            }
+        }
+
+        // Render reports
+        function renderReports() {
+            elements.reportsTableBody.innerHTML = '';
+
+            if (state.filteredReports.length === 0) {
+                elements.noReports.classList.remove('hidden');
+                return;
+            }
+
+            elements.noReports.classList.add('hidden');
+
+            state.filteredReports.forEach(report => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-600 hover:bg-gray-700 transition duration-200';
+                
+                row.innerHTML = `
+                    <td class="p-3 text-telegram">#${report.id}</td>
+                    <td class="p-3 text-telegram">${formatDate(report.incident_at)}</td>
+                    <td class="p-3 text-telegram">
+                        <div class="text-sm">
+                            <div>${report.user_name || 'N/A'}</div>
+                            <div class="text-telegram-hint">ID: ${report.user_id}</div>
+                        </div>
+                    </td>
+                    <td class="p-3 text-telegram">${report.park}</td>
+                    <td class="p-3 text-telegram">${report.station}</td>
+                    <td class="p-3 text-telegram">
+                        <div class="max-w-xs truncate">${report.title}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="flex space-x-2">
+                            <button onclick="viewReport(${report.id})" 
+                                    class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition duration-200">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button onclick="editReport(${report.id})" 
+                                    class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm transition duration-200">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteReport(${report.id})" 
+                                    class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition duration-200">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+
+                elements.reportsTableBody.appendChild(row);
+            });
+        }
+
+        // Handle filter change
+        function handleFilterChange() {
+            const selectedPark = elements.filterPark.value;
+            const selectedStation = elements.filterStation.value;
+
+            // Update station filter based on park selection
+            if (selectedPark && elements.filterPark === document.activeElement) {
+                elements.filterStation.innerHTML = '<option value="">Всі станції</option>';
+                PARKS_DICT[selectedPark].forEach(station => {
+                    const option = document.createElement('option');
+                    option.value = station;
+                    option.textContent = station;
+                    elements.filterStation.appendChild(option);
+                });
+            }
+
+            // Filter reports
+            state.filteredReports = state.reports.filter(report => {
+                const parkMatch = !selectedPark || report.park === selectedPark;
+                const stationMatch = !selectedStation || report.station === selectedStation;
+                return parkMatch && stationMatch;
+            });
+
+            renderReports();
+        }
+
+        // View report details
+        function viewReport(reportId) {
+            const report = state.reports.find(r => r.id === reportId);
+            if (!report) return;
+
+            elements.modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-telegram-hint">ID звіту</label>
+                            <p class="text-telegram">#${report.id}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-telegram-hint">Дата інциденту</label>
+                            <p class="text-telegram">${formatDate(report.incident_at)}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-telegram-hint">Парк</label>
+                            <p class="text-telegram">${report.park}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-telegram-hint">Станція</label>
+                            <p class="text-telegram">${report.station}</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-telegram-hint">Користувач</label>
+                        <p class="text-telegram">${report.user_name || 'N/A'} (ID: ${report.user_id})</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-telegram-hint">Заголовок</label>
+                        <p class="text-telegram">${report.title}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-telegram-hint">Опис</label>
+                        <p class="text-telegram whitespace-pre-wrap">${report.description}</p>
+                    </div>
+                    
+                    ${report.images && report.images.length > 0 ? `
+                    <div>
+                        <label class="block text-sm font-medium text-telegram-hint mb-2">Зображення</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${report.images.map(img => `
+                                <img src="${img}" class="w-full h-32 object-cover rounded-lg cursor-pointer" 
+                                     onclick="window.open('${img}', '_blank')">
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            elements.reportModal.classList.remove('hidden');
+        }
+
+        // Edit report
+        function editReport(reportId) {
+            const report = state.reports.find(r => r.id === reportId);
+            if (!report) return;
+
+            const newTitle = prompt('Новий заголовок:', report.title);
+            if (newTitle === null || newTitle.trim() === '') return;
+
+            updateReport(reportId, { title: newTitle.trim() });
+        }
+
+        // Delete report
+        async function deleteReport(reportId) {
+            if (!confirm('Ви впевнені, що хочете видалити цей звіт?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/report/${reportId}?initData=${encodeURIComponent(tg.initData || '')}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.ok) {
+                    showSuccess('Звіт видалено');
+                    await loadReports();
+                } else {
+                    throw new Error(result.error || 'Помилка видалення');
+                }
+
+            } catch (error) {
+                showError('Помилка видалення звіту');
+            }
+        }
+
+        // Update report
+        async function updateReport(reportId, updates) {
+            try {
+                const response = await fetch(`${API_BASE}/api/report/${reportId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        initData: tg.initData || '',
+                        ...updates
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.ok) {
+                    showSuccess('Звіт оновлено');
+                    await loadReports();
+                } else {
+                    throw new Error(result.error || 'Помилка оновлення');
+                }
+
+            } catch (error) {
+                showError('Помилка оновлення звіту');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            elements.reportModal.classList.add('hidden');
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleString('uk-UA');
+        }
+
+        // Show success message
+        function showSuccess(message) {
+            tg.showAlert(message);
+        }
+
+        // Show error message
+        function showError(message) {
+            tg.showAlert(message);
+        }
+
+        // Make functions global for onclick handlers
+        window.removeImage = removeImage;
+        window.viewReport = viewReport;
+        window.editReport = editReport;
+        window.deleteReport = deleteReport;
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
