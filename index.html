@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Telegram Mini App</title>
+  <!-- SDK Telegram Mini Apps -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    body {
+      margin: 0; padding: 16px;
+      background: var(--tg-theme-bg-color, #fff);
+      color: var(--tg-theme-text-color, #222);
+    }
+    .card {
+      border-radius: 16px; padding: 16px; 
+      background: var(--tg-theme-secondary-bg-color, #f2f3f5);
+    }
+    button {
+      border: 0; border-radius: 12px; padding: 12px 16px; 
+      font-size: 16px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>Привет, Telegram Mini App 👋</h2>
+  <div class="card">
+    <p id="user">Загружаю пользователя…</p>
+    <button id="ok">ОК</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+
+    // Рекомендуется сразу "расширить" WebApp на всю высоту
+    tg.expand();
+
+    // Тема/цвета подтягиваются автоматически через CSS переменные:
+    // var(--tg-theme-*)
+    // Можно также прочитать их в JS: tg.themeParams
+
+    // Данные пользователя (упрощённо)
+    const user = tg.initDataUnsafe?.user;
+    const p = document.getElementById('user');
+    if (user) {
+      p.textContent = `Ты: ${user.first_name} (id: ${user.id})`;
+    } else {
+      p.textContent = 'Пользователь неизвестен (запусти из Telegram).';
+    }
+
+    // Кнопка "ОК": показываем системную MainButton внизу
+    tg.MainButton.setText('Готово');
+    tg.MainButton.onClick(() => {
+      // Отправим данные обратно "в Telegram" (в бота), если нужно
+      tg.sendData(JSON.stringify({ action: 'ok_pressed', ts: Date.now() }));
+      tg.close(); // закрыть мини-приложение
+    });
+    tg.MainButton.show();
+
+    // На обычную кнопку в интерфейсе повесим что-то простое
+    document.getElementById('ok').addEventListener('click', () => {
+      alert('Нажато ОК внутри веб-страницы');
+    });
+  </script>
+</body>
+</html>
